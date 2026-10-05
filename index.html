@@ -1,0 +1,524 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#faf9f5;color:#141413}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Born-Haber en átomos</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Literata:opsz,wght@7..72,600;7..72,700&family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@500;700&display=swap">
+<style>
+/* Layout: escenario animado (canvas) + panel de explicación; apila en pantallas estrechas. Estética fija de laboratorio oscuro. */
+:root {
+  --bg: #0a0f1c;
+  --surface: #121a2c;
+  --fg: #e3e9f4;
+  --muted: #8d9ab3;
+  --line: #243049;
+  --heat: #ff8a38;
+  --cool: #58a8ff;
+  --ion: #b59cff;
+  --display: "Literata", Georgia, serif;
+  --body: "Figtree", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --mono: "JetBrains Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--fg); font-family: var(--body); font-size: 15px; line-height: 1.55; }
+.wrap { max-width: 1240px; margin: 0 auto; padding-inline: 18px; padding-block: 24px 36px; display: grid; gap: 18px; }
+header h1 { font-family: var(--display); font-size: clamp(1.5rem, 3vw, 2.1rem); line-height: 1.15; margin: 0 0 4px; text-wrap: balance; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+.main { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 18px; align-items: start; }
+@media (max-width: 960px) { .main { grid-template-columns: 1fr; } }
+.stage { border-radius: 12px; overflow: hidden; border: 1px solid var(--line); background: #0b1120; }
+canvas { display: block; width: 100%; aspect-ratio: 800 / 480; max-width: 100%; }
+.panel { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 18px 20px; display: grid; gap: 12px; min-width: 0; }
+.eyebrow { font-size: 12px; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); font-weight: 700; }
+.panel h2 { font-family: var(--display); font-size: 1.4rem; line-height: 1.2; margin: 0; text-wrap: balance; }
+.eq { font-family: var(--mono); font-size: 14px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 9px 12px; overflow-x: auto; white-space: nowrap; }
+.chip { justify-self: start; font-family: var(--mono); font-weight: 700; font-size: 13px; padding: 3px 11px; border-radius: 999px; border: 1px solid currentColor; }
+.chip.heat { color: var(--heat); } .chip.cool { color: var(--cool); } .chip.ion { color: var(--ion); } .chip.neutral { color: var(--muted); }
+#body { display: grid; gap: 10px; }
+#body p { margin: 0; max-width: 62ch; }
+.solve { font-family: var(--mono); font-size: 13.5px; line-height: 1.95; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; overflow-x: auto; }
+.solve div { white-space: nowrap; }
+.solve .h { color: var(--heat); } .solve .c { color: var(--cool); } .solve strong { color: var(--ion); }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+button { font: inherit; font-weight: 600; font-size: 14px; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); color: var(--fg); padding: 8px 13px; cursor: pointer; }
+button:hover:not(:disabled) { border-color: var(--muted); }
+button:disabled { opacity: .35; cursor: default; }
+button:focus-visible { outline: 2px solid var(--ion); outline-offset: 2px; }
+button.primary { background: var(--fg); color: var(--bg); border-color: var(--fg); }
+.dots { display: flex; gap: 6px; }
+.dots button { width: 11px; height: 11px; padding: 0; border-radius: 50%; background: var(--line); border: 0; }
+.dots button.on { background: var(--fg); }
+.key { display: flex; flex-wrap: wrap; gap: 14px; font-size: 13px; color: var(--muted); padding-top: 4px; border-top: 1px solid var(--line); }
+.key span { display: inline-flex; align-items: center; gap: 6px; }
+.key i { width: 11px; height: 11px; border-radius: 50%; display: inline-block; }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>Ciclo de Born-Haber del NaCl, átomo a átomo</h1>
+    <p>Mira cómo el sodio y el cloro se convierten en sal pasando por átomos sueltos, electrones e iones. Las chispas naranjas son energía que entra; las azules, energía que sale.</p>
+  </header>
+
+  <div class="main">
+    <div class="stage"><canvas id="cv" aria-label="Animación del ciclo de Born-Haber con átomos de sodio y cloro"></canvas></div>
+
+    <div class="panel" aria-live="polite">
+      <div class="eyebrow" id="eyebrow"></div>
+      <h2 id="title"></h2>
+      <div class="eq" id="eq"></div>
+      <span class="chip" id="chip"></span>
+      <div id="body"></div>
+      <div class="controls">
+        <button id="prev" type="button">← Anterior</button>
+        <button id="replay" type="button">↻ Repetir</button>
+        <button id="next" type="button" class="primary">Siguiente →</button>
+        <button id="auto" type="button">▶ Automático</button>
+      </div>
+      <div class="dots" id="dots"></div>
+      <div class="key">
+        <span><i style="background:#c7cbd6"></i>Na</span>
+        <span><i style="background:#9f86f2"></i>Na⁺</span>
+        <span><i style="background:#4cc47e"></i>Cl</span>
+        <span><i style="background:#2bb59a"></i>Cl⁻</span>
+        <span><i style="background:#ffd250"></i>electrón</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function () {
+  const cv = document.getElementById("cv");
+  const ctx = cv.getContext("2d");
+  const W = 800, H = 480, TAU = Math.PI * 2;
+  const reduce = window.matchMedia && matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function resize() {
+    const dpr = window.devicePixelRatio || 1;
+    const w = cv.clientWidth || W;
+    cv.width = Math.round(w * dpr);
+    cv.height = Math.round(w * H / W * dpr);
+    const s = cv.width / W;
+    ctx.setTransform(s, 0, 0, s, 0, 0);
+  }
+  window.addEventListener("resize", resize);
+  resize();
+
+  // Utilidades
+  const clamp = (v, a = 0, b = 1) => Math.max(a, Math.min(b, v));
+  const lerp = (a, b, t) => a + (b - a) * t;
+  const ease = t => t < .5 ? 2 * t * t : 1 - Math.pow(-2 * t + 2, 2) / 2;
+  const seg = (t, a, b) => clamp((t - a) / (b - a));
+  const hash = i => { const x = Math.sin(i * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+  const rgba = (c, a) => `rgba(${c[0]},${c[1]},${c[2]},${a})`;
+  const mix = (c1, c2, t) => c1.map((v, i) => Math.round(lerp(v, c2[i], t)));
+  const C = {
+    na: [150, 156, 172], naHi: [240, 242, 248],
+    nap: [120, 90, 226], napHi: [214, 200, 255],
+    cl: [30, 148, 82], clHi: [170, 246, 192],
+    clm: [14, 128, 110], clmHi: [130, 240, 214],
+    e: [255, 210, 80], heat: [255, 138, 56], cool: [88, 168, 255],
+    text: [227, 233, 244], muted: [141, 154, 179], ion: [181, 156, 255]
+  };
+  let time = 0;
+
+  // Dibujo básico
+  function glow(x, y, r, c, a) {
+    if (a <= 0) return;
+    const g = ctx.createRadialGradient(x, y, 0, x, y, r);
+    g.addColorStop(0, rgba(c, a)); g.addColorStop(1, rgba(c, 0));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+  }
+  function sphere(x, y, r, base, hi, a = 1) {
+    if (a <= 0) return;
+    ctx.globalAlpha = a;
+    const g = ctx.createRadialGradient(x - r * .35, y - r * .4, r * .1, x, y, r);
+    g.addColorStop(0, rgba(hi, 1)); g.addColorStop(1, rgba(base, 1));
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(x, y, r, 0, TAU); ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+  function text(s, x, y, a = 1, c = C.text, size = 13, align = "center", weight = 600, font = "Figtree, system-ui, sans-serif") {
+    if (a <= 0) return;
+    ctx.font = `${weight} ${size}px ${font}`;
+    ctx.textAlign = align; ctx.textBaseline = "middle";
+    ctx.fillStyle = rgba(c, a); ctx.fillText(s, x, y);
+  }
+  function sign(x, y, r, plus, a) {
+    if (a <= 0) return;
+    ctx.strokeStyle = `rgba(255,255,255,${a})`; ctx.lineWidth = 2.2; ctx.lineCap = "round";
+    const s = r * .42;
+    ctx.beginPath(); ctx.moveTo(x - s, y); ctx.lineTo(x + s, y);
+    if (plus) { ctx.moveTo(x, y - s); ctx.lineTo(x, y + s); }
+    ctx.stroke();
+  }
+  function drawNa(x, y, k, a = 1, label = "", la = 1) {
+    const r = lerp(18, 12, k);
+    if (k > 0) glow(x, y, r * 2.4, C.ion, .25 * k * a);
+    sphere(x, y, r, mix(C.na, C.nap, k), mix(C.naHi, C.napHi, k), a);
+    sign(x, y, r, true, clamp((k - .5) * 2) * a);
+    if (label) text(label, x, y + r + 15, a * la, C.text, 13);
+  }
+  function drawCl(x, y, k, a = 1, label = "", la = 1, lc = C.text) {
+    const r = lerp(19, 24, k);
+    if (k > 0) glow(x, y, r * 2.2, [60, 220, 190], .22 * k * a);
+    sphere(x, y, r, mix(C.cl, C.clm, k), mix(C.clHi, C.clmHi, k), a);
+    sign(x, y, r, false, clamp((k - .5) * 2) * a);
+    if (label) text(label, x, y + r + 15, a * la, lc, 13);
+  }
+  function drawE(x, y, a = 1) {
+    if (a <= 0) return;
+    glow(x, y, 16, C.e, .55 * a);
+    sphere(x, y, 4.5, [230, 170, 30], [255, 250, 200], a);
+    text("e⁻", x + 11, y - 10, a, C.e, 12, "left", 700);
+  }
+  function sparks(tx, ty, c, strength, dir, n = 20, R = 130, seed = 0) {
+    if (strength <= 0) return;
+    for (let i = 0; i < n; i++) {
+      const p = (time * .85 + hash(i + seed)) % 1;
+      const ang = hash(i + seed + 77) * TAU;
+      const r = dir === "in" ? 8 + R * (1 - ease(p)) : 14 + R * ease(p);
+      const x = tx + Math.cos(ang) * r, y = ty + Math.sin(ang) * r;
+      const a = strength * Math.sin(p * Math.PI);
+      glow(x, y, 9, c, .8 * a);
+      ctx.fillStyle = rgba([255, 255, 255], .85 * a);
+      ctx.beginPath(); ctx.arc(x, y, 1.6, 0, TAU); ctx.fill();
+    }
+  }
+  function ring(x, y, p, c, maxR) {
+    if (p <= 0 || p >= 1) return;
+    ctx.strokeStyle = rgba(c, (1 - p) * .9);
+    ctx.lineWidth = 4 * (1 - p) + .6;
+    ctx.beginPath(); ctx.arc(x, y, lerp(12, maxR, ease(p)), 0, TAU); ctx.stroke();
+  }
+  function bolt(x1, y1, x2, y2, a) {
+    if (a <= 0) return;
+    const k = Math.floor(time * 18);
+    const pts = [[x1, y1]];
+    for (let i = 1; i < 7; i++) {
+      const f = i / 7;
+      pts.push([lerp(x1, x2, f) + (hash(k * 13 + i) - .5) * 34, lerp(y1, y2, f) + (hash(k * 7 + i + 3) - .5) * 12]);
+    }
+    pts.push([x2, y2]);
+    ctx.lineJoin = "round";
+    [[10, .18], [4, .5], [1.8, 1]].forEach(([w, al]) => {
+      ctx.strokeStyle = w > 2 ? rgba(C.heat, al * a) : `rgba(255,240,210,${a})`;
+      ctx.lineWidth = w; ctx.beginPath();
+      pts.forEach(([x, y], i) => i ? ctx.lineTo(x, y) : ctx.moveTo(x, y));
+      ctx.stroke();
+    });
+  }
+
+  // Posiciones fijas
+  const OUR_NA0 = [180, 300], NA_G = [270, 170], E_PARK = [355, 100], CL_G = [440, 190], CL_B = [545, 322];
+  const mols = [{ x: 520, y: 232, a: .3 }, { x: 600, y: 128, a: -.6 }, { x: 610, y: 342, a: 1.1 }];
+  function molPos(i) {
+    const m = mols[i];
+    return { x: m.x + Math.sin(time * .7 + i * 2) * 6, y: m.y + Math.cos(time * .6 + i) * 5, a: m.a + Math.sin(time * .4 + i) * .2 };
+  }
+  function drawMol(i, a = 1, h = 11) {
+    const m = molPos(i);
+    const dx = Math.cos(m.a) * h, dy = Math.sin(m.a) * h;
+    drawCl(m.x - dx, m.y - dy, 0, a); drawCl(m.x + dx, m.y + dy, 0, a);
+    return m;
+  }
+  function drawBlock(a, skipOurs) {
+    if (a <= 0) return;
+    ctx.fillStyle = rgba([60, 72, 96], .55 * a);
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(66, 408, 138, 8, 4) : ctx.rect(66, 408, 138, 8); ctx.fill();
+    for (let j = 0; j < 4; j++) for (let i = 0; i < 4; i++) {
+      if (skipOurs && i === 3 && j === 0) continue;
+      sphere(90 + i * 30 + Math.sin(time * 2 + i * 3 + j) * .7, 300 + j * 30, 15.5, C.na, C.naHi, a);
+    }
+    text("Na(s) · sodio metálico", 135, 436, a, C.muted, 12.5);
+  }
+  function orbit(cx, cy, a) {
+    const ang = time * 3.2;
+    if (a > 0) {
+      ctx.strokeStyle = rgba(C.e, .22 * a); ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.ellipse(cx, cy, 32, 15, -.35, 0, TAU); ctx.stroke();
+    }
+    const c = Math.cos(-.35), s = Math.sin(-.35);
+    const ex = Math.cos(ang) * 32, ey = Math.sin(ang) * 15;
+    return [cx + ex * c - ey * s, cy + ex * s + ey * c];
+  }
+
+  // Red cristalina
+  const lattice = [];
+  for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) {
+    const i = lattice.length;
+    lattice.push({ x: 274 + c * 36, y: 266 + r * 36, na: (c + r) % 2 === 0, ours: (c === 3 && r === 1) ? "na" : (c === 4 && r === 1) ? "cl" : null, h: hash(i + 400), ang: hash(i + 900) * TAU, R: 250 + hash(i + 1300) * 110 });
+  }
+
+  // Medidor de energía
+  const scenes = [
+    { dur: 3.2, E0: 0, E1: 0, w: [0, 1] },
+    { dur: 4.6, E0: 0, E1: 107, w: [.15, .9] },
+    { dur: 4.6, E0: 107, E1: 229, w: [.05, .55] },
+    { dur: 4.8, E0: 229, E1: 725, w: [.1, .5] },
+    { dur: 4.6, E0: 725, E1: 376, w: [.45, .85] },
+    { dur: 5.8, E0: 376, E1: -411, w: [.35, .85] },
+    { dur: 3.2, E0: -411, E1: -411, w: [0, 1] }
+  ];
+  function drawMeter(E, visited) {
+    const x = 724, w = 24, top = 52, bot = 432;
+    const Y = v => bot - (v + 500) / 1300 * (bot - top);
+    text("ENERGÍA", x + w / 2, 26, 1, C.muted, 11, "center", 700);
+    text("del sistema", x + w / 2, 40, .8, C.muted, 10.5, "center", 500);
+    ctx.fillStyle = "rgba(255,255,255,.05)"; ctx.strokeStyle = "rgba(255,255,255,.14)"; ctx.lineWidth = 1;
+    ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, top, w, bot - top, 12) : ctx.rect(x, top, w, bot - top); ctx.fill(); ctx.stroke();
+    const y0 = Y(0), ye = Y(E);
+    const col = E >= 0 ? C.heat : C.cool;
+    const g = ctx.createLinearGradient(0, Math.min(y0, ye), 0, Math.max(y0, ye));
+    g.addColorStop(0, rgba(col, E >= 0 ? .95 : .45)); g.addColorStop(1, rgba(col, E >= 0 ? .45 : .95));
+    ctx.fillStyle = g;
+    ctx.fillRect(x + 4, Math.min(y0, ye), w - 8, Math.abs(ye - y0));
+    ctx.strokeStyle = "rgba(255,255,255,.55)"; ctx.lineWidth = 1.5;
+    ctx.beginPath(); ctx.moveTo(x - 5, y0); ctx.lineTo(x + w + 5, y0); ctx.stroke();
+    text("0", x + w + 10, y0, .8, C.muted, 11, "left", 600);
+    visited.forEach(v => {
+      if (v === 0) return;
+      ctx.strokeStyle = "rgba(255,255,255,.35)"; ctx.lineWidth = 1;
+      ctx.beginPath(); ctx.moveTo(x + w, Y(v)); ctx.lineTo(x + w + 6, Y(v)); ctx.stroke();
+      text(String(v), x + w + 9, Y(v), .6, C.muted, 10, "left", 500, "JetBrains Mono, monospace");
+    });
+    glow(x + w / 2, ye, 16, col, .6);
+    const v = Math.round(E);
+    text((v > 0 ? "+" : v < 0 ? "−" : "") + Math.abs(v) + " kJ/mol", x - 9, ye, 1, col, 13, "right", 700, "JetBrains Mono, monospace");
+  }
+
+  const captions = [
+    ["PUNTO DE PARTIDA", "Na(s) + ½Cl₂(g)", C.muted],
+    ["1 · SUBLIMACIÓN DEL SODIO", "+107 kJ/mol", C.heat],
+    ["2 · DISOCIACIÓN DEL CLORO", "+122 kJ/mol", C.heat],
+    ["3 · IONIZACIÓN DEL SODIO", "+496 kJ/mol", C.heat],
+    ["4 · AFINIDAD ELECTRÓNICA DEL CLORO", "−349 kJ/mol", C.cool],
+    ["5 · FORMACIÓN DE LA RED", "U = ?", C.ion],
+    ["RESULTADO", "U = −787 kJ/mol", C.ion]
+  ];
+
+  // Escena
+  function draw(s, t) {
+    // fondo
+    ctx.fillStyle = "#0b1120"; ctx.fillRect(0, 0, W, H);
+    const bg = ctx.createRadialGradient(380, 250, 20, 380, 250, 460);
+    bg.addColorStop(0, "rgba(40,60,110,.35)"); bg.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = bg; ctx.fillRect(0, 0, W, H);
+    ctx.fillStyle = "rgba(255,255,255,.035)";
+    for (let gx = 20; gx < 690; gx += 30) for (let gy = 90; gy < 470; gy += 30) ctx.fillRect(gx, gy, 1.5, 1.5);
+
+    const [cap, val, vc] = captions[s];
+    text(cap, 22, 28, 1, C.muted, 11.5, "left", 700);
+    text(val, 22, 52, 1, vc, 20, "left", 700, "JetBrains Mono, monospace");
+
+    // Bloque de sodio y moléculas de cloro
+    const blockA = s < 5 ? 1 : s === 5 ? 1 - seg(t, 0, .25) : 0;
+    const fadeOthers = s < 5 ? 1 : s === 5 ? 1 - seg(t, 0, .25) : 0;
+
+    if (s === 1) glow(135, 420, 110, C.heat, .35 * seg(t, 0, .2) * (1 - seg(t, .85, 1)));
+    drawBlock(blockA, s >= 1);
+    drawMol(1, fadeOthers); drawMol(2, fadeOthers);
+    if (s <= 4 && s >= 0) text("Cl₂(g) · cloro gaseoso", 600, 412, s === 0 ? 1 : .6, C.muted, 12.5);
+
+    // Escena 0: objetivo fantasma
+    if (s === 0) {
+      ctx.setLineDash([5, 6]); ctx.strokeStyle = "rgba(181,156,255,.45)"; ctx.lineWidth = 1.5;
+      ctx.beginPath(); ctx.roundRect ? ctx.roundRect(258, 244, 320, 150, 14) : ctx.rect(258, 244, 320, 150); ctx.stroke(); ctx.setLineDash([]);
+      text("NaCl(s)", 418, 306, .9, C.ion, 18, "center", 700);
+      text("¿cuánta energía libera la red?", 418, 330, .7, C.muted, 12.5, "center", 500);
+    }
+
+    // Molécula de cloro "nuestra"
+    let clPos = null, clK = 0, clLabel = "", clA = 1;
+    if (s <= 1) {
+      drawMol(0, 1);
+    } else if (s === 2) {
+      const m = molPos(0);
+      const vib = seg(t, .05, .45);
+      const h = 11 + Math.sin(time * 32) * 4 * vib + 6 * seg(t, .35, .45);
+      const dx = Math.cos(m.a) * h, dy = Math.sin(m.a) * h;
+      sparks(m.x, m.y, C.heat, seg(t, 0, .1) * (1 - seg(t, .45, .55)), "in", 18, 120, 10);
+      if (t < .45) {
+        drawCl(m.x - dx, m.y - dy, 0); drawCl(m.x + dx, m.y + dy, 0);
+      } else {
+        const p = ease(seg(t, .45, .9));
+        ring(m.x, m.y, seg(t, .45, .75), C.heat, 70);
+        const bx = lerp(m.x + dx, CL_B[0], p), by = lerp(m.y + dy, CL_B[1], p);
+        drawCl(bx, by, 0, lerp(1, .35, p), "sobra: para otro NaCl", seg(t, .8, 1), C.muted);
+        clPos = [lerp(m.x - dx, CL_G[0], p), lerp(m.y - dy, CL_G[1], p)];
+        clLabel = "Cl(g)";
+        drawCl(clPos[0], clPos[1], 0, 1, clLabel, seg(t, .8, 1));
+        clPos = null;
+      }
+    } else {
+      // átomo B sobrante
+      if (s <= 5) drawCl(CL_B[0], CL_B[1], 0, .35 * fadeOthers);
+    }
+
+    // Sodio "nuestro"
+    let naPos = null, naK = 0, naLabel = "Na(g)", naLA = 1;
+    if (s === 1) {
+      const p = ease(seg(t, .3, .9));
+      const jig = Math.sin(time * 45) * 2.2 * seg(t, .08, .3) * (1 - p);
+      naPos = [lerp(OUR_NA0[0], NA_G[0], p) + jig, lerp(OUR_NA0[1], NA_G[1], p) - Math.sin(p * Math.PI) * 30];
+      naLA = seg(t, .8, 1);
+      sparks(naPos[0], naPos[1], C.heat, seg(t, .05, .2) * (1 - seg(t, .85, 1)), "in", 18, 120, 1);
+    } else if (s === 2) { naPos = NA_G; }
+    else if (s === 3) {
+      naPos = NA_G; naK = ease(seg(t, .4, .8)); naLabel = t < .6 ? "Na(g)" : "Na⁺(g)";
+      bolt(300, 8, NA_G[0] + 4, NA_G[1] - 20, t > .12 && t < .42 ? (hash(Math.floor(time * 18)) > .25 ? 1 : .3) : 0);
+      sparks(NA_G[0], NA_G[1], C.heat, seg(t, .05, .15) * (1 - seg(t, .4, .5)), "in", 26, 150, 3);
+      ring(NA_G[0], NA_G[1], seg(t, .38, .7), C.heat, 80);
+    } else if (s === 4) { naPos = NA_G; naK = 1; naLabel = "Na⁺(g)"; }
+
+    // Electrón
+    if (s >= 1 && s <= 4) {
+      let ePos = null, eA = 1;
+      if (s === 1) { ePos = orbit(naPos[0], naPos[1], seg(t, .75, 1)); eA = seg(t, .75, 1); }
+      else if (s === 2) { ePos = orbit(NA_G[0], NA_G[1], 1); }
+      else if (s === 3) {
+        const p = ease(seg(t, .35, .8));
+        const o = orbit(NA_G[0], NA_G[1], 1 - p);
+        ePos = [lerp(o[0], E_PARK[0], p), lerp(o[1], E_PARK[1], p) + Math.sin(time * 3) * 3 * p];
+      } else {
+        const p = ease(seg(t, 0, .45));
+        ePos = [lerp(E_PARK[0], CL_G[0], p), lerp(E_PARK[1] + Math.sin(time * 3) * 3 * (1 - p), CL_G[1], p) - Math.sin(p * Math.PI) * 40];
+        eA = 1 - seg(t, .45, .55);
+      }
+      if (naPos && s <= 3) drawNa(naPos[0], naPos[1], naK, 1, naLabel, naLA);
+      if (ePos) drawE(ePos[0], ePos[1], eA);
+    }
+    if (s === 4 && naPos) drawNa(naPos[0], naPos[1], 1, 1, naLabel);
+
+    // Cloro en escenas 3 y 4
+    if (s === 3) drawCl(CL_G[0], CL_G[1] + Math.sin(time * 1.5) * 2, 0, 1, "Cl(g)");
+    if (s === 4) {
+      const k = ease(seg(t, .45, .65));
+      sparks(CL_G[0], CL_G[1], C.cool, seg(t, .45, .55) * (1 - seg(t, .85, 1)), "out", 22, 130, 5);
+      ring(CL_G[0], CL_G[1], seg(t, .48, .9), C.cool, 90);
+      drawCl(CL_G[0], CL_G[1], k, 1, t < .55 ? "Cl(g)" : "Cl⁻(g)");
+    }
+
+    // Escena 5 y 6: red cristalina
+    if (s >= 5) {
+      const cx = 400, cy = 320;
+      const flash = s === 5 ? Math.sin(Math.PI * seg(t, .62, .95)) : 0;
+      if (s === 6) glow(cx, cy, 230, C.ion, .12 + .05 * Math.sin(time * 2));
+      glow(cx, cy, 300, C.cool, .45 * flash);
+      // dibujar primero los Cl⁻ (más grandes) y luego los Na⁺
+      [false, true].forEach(isNa => lattice.forEach(L => {
+        if (L.na !== isNa) return;
+        let x = L.x, y = L.y, a = 1, la = 0;
+        if (s === 5) {
+          let sx, sy;
+          if (L.ours === "na") { sx = NA_G[0]; sy = NA_G[1]; }
+          else if (L.ours === "cl") { sx = CL_G[0]; sy = CL_G[1]; }
+          else { sx = cx + Math.cos(L.ang) * L.R; sy = cy + Math.sin(L.ang) * L.R * .75; a = seg(t, .05 + L.h * .12, .25 + L.h * .12); }
+          const p = L.ours ? ease(seg(t, .18, .6)) : ease(seg(t, .2 + L.h * .22, .58 + L.h * .12));
+          x = lerp(sx, L.x, p); y = lerp(sy, L.y, p);
+          la = L.ours ? 1 - seg(t, .12, .3) : 0;
+        } else {
+          x += Math.sin(time * 2.2 + L.h * 9) * .8;
+        }
+        if (isNa) drawNa(x, y, 1, a, L.ours ? "Na⁺(g)" : "", la);
+        else drawCl(x, y, 1, a, L.ours ? "Cl⁻(g)" : "", la);
+      }));
+      if (s === 5) {
+        ring(cx, cy, seg(t, .62, 1), C.cool, 330);
+        ring(cx, cy, seg(t, .7, 1), C.cool, 250);
+        sparks(cx, cy, C.cool, seg(t, .6, .7) * (1 - seg(t, .92, 1)), "out", 44, 250, 20);
+      }
+      text("NaCl(s) · red cristalina", cx, 418, s === 6 ? 1 : seg(t, .75, 1), C.ion, 14, "center", 700);
+    }
+
+    // Medidor
+    const sc = scenes[s];
+    const E = lerp(sc.E0, sc.E1, ease(seg(t, sc.w[0], sc.w[1])));
+    const visited = scenes.slice(0, s).map(x => x.E1).concat(t >= 1 ? [sc.E1] : []);
+    drawMeter(E, visited);
+  }
+
+  // Textos del panel
+  const steps = [
+    { title: "Dos caminos hacia la misma sal", eq: "Na(s) + ½Cl₂(g) → NaCl(s)", chip: ["neutral", "ΔH°f = −411 kJ/mol (dato medido)"],
+      body: ["<p>Tenemos sodio metálico y cloro gaseoso. Si reaccionan directamente se forma sal y se liberan 411 kJ/mol; eso se mide en el laboratorio.</p>",
+             "<p>La energía de la red cristalina no se puede medir. Por eso llegamos a la misma sal por un camino de pasos pequeños. Por la <b>ley de Hess</b>, los dos caminos intercambian la misma energía total.</p>"] },
+    { title: "Sublimación del sodio", eq: "Na(s) → Na(g)", chip: ["heat", "ΔHsub = +107 kJ/mol"],
+      body: ["<p>Calentamos el metal: un átomo de sodio se desprende del bloque y pasa a gas. Hay que romper los enlaces metálicos, así que el sistema <b>absorbe</b> energía y el medidor sube.</p>"] },
+    { title: "Disociación del cloro", eq: "½Cl₂(g) → Cl(g)", chip: ["heat", "½D = +122 kJ/mol"],
+      body: ["<p>La molécula de Cl₂ vibra hasta romper su enlace. Romperlo entero cuesta 244 kJ/mol, pero cada NaCl solo necesita <b>un</b> átomo de cloro, así que cuenta la mitad: +122.</p>",
+             "<p>El otro átomo queda aparte: servirá para formar otra unidad de NaCl.</p>"] },
+    { title: "Ionización del sodio", eq: "Na(g) → Na⁺(g) + e⁻", chip: ["heat", "EI = +496 kJ/mol"],
+      body: ["<p>Un aporte fuerte de energía arranca el electrón externo del sodio. El átomo se convierte en el catión Na⁺, más pequeño porque pierde su capa más externa.</p>",
+             "<p>Es el paso que más energía cuesta: el medidor se dispara.</p>"] },
+    { title: "Afinidad electrónica del cloro", eq: "Cl(g) + e⁻ → Cl⁻(g)", chip: ["cool", "AE = −349 kJ/mol"],
+      body: ["<p>El electrón viaja hasta el cloro, que lo captura y completa su octeto. Se forma el anión Cl⁻, algo más grande, y se <b>libera</b> energía.</p>",
+             "<p>Aun así, los iones sueltos siguen 376 kJ/mol por encima del punto de partida. Formar iones aislados no compensa por sí solo.</p>"] },
+    { title: "Formación de la red cristalina", eq: "Na⁺(g) + Cl⁻(g) → NaCl(s)", chip: ["ion", "U = ?"],
+      body: ["<p>Muchísimos iones Na⁺ y Cl⁻ se atraen y encajan en una red cúbica alternada. La atracción entre cargas opuestas libera una enorme cantidad de energía: es la <b>energía reticular U</b>.</p>",
+             "<p>Es la incógnita. Como este camino termina en la misma sal que el camino directo, U debe ser exactamente lo que falta para llegar a −411.</p>"] },
+    { title: "Cómo se resuelve", eq: "ΔH°f = ΔHsub + ½D + EI + AE + U", chip: ["ion", "U = −787 kJ/mol"],
+      body: ["<p>Sumamos todo lo del camino por pasos y lo igualamos al camino directo:</p>",
+             `<div class="solve">
+                <div>−411 = <span class="h">107</span> + <span class="h">122</span> + <span class="h">496</span> <span class="c">− 349</span> + U</div>
+                <div>−411 = 376 + U</div>
+                <div>U = −411 − 376</div>
+                <div><strong>U = −787 kJ/mol</strong></div>
+              </div>`,
+             "<p>El signo negativo indica que formar la red libera energía; es lo que hace estable a la sal. Algunos libros definen la energía reticular al revés (romper la red) y la dan como +787 kJ/mol.</p>"] }
+  ];
+
+  const dots = document.getElementById("dots");
+  steps.forEach((_, i) => {
+    const b = document.createElement("button");
+    b.type = "button"; b.setAttribute("aria-label", "Ir al paso " + i);
+    b.addEventListener("click", () => { setAuto(false); go(i); });
+    dots.appendChild(b);
+  });
+
+  let scene = 0, start = performance.now(), auto = false;
+  const prev = document.getElementById("prev"), next = document.getElementById("next"), autoBtn = document.getElementById("auto");
+
+  function go(i) {
+    scene = Math.max(0, Math.min(steps.length - 1, i));
+    start = performance.now() - (reduce ? 1e6 : 0);
+    const S = steps[scene];
+    document.getElementById("eyebrow").textContent = `Paso ${scene} de ${steps.length - 1}`;
+    document.getElementById("title").textContent = S.title;
+    document.getElementById("eq").textContent = S.eq;
+    const chip = document.getElementById("chip");
+    chip.className = "chip " + S.chip[0]; chip.textContent = S.chip[1];
+    document.getElementById("body").innerHTML = S.body.join("");
+    [...dots.children].forEach((d, k) => d.classList.toggle("on", k === scene));
+    prev.disabled = scene === 0; next.disabled = scene === steps.length - 1;
+  }
+  function setAuto(on) { auto = on; autoBtn.textContent = on ? "❚❚ Pausa" : "▶ Automático"; }
+
+  prev.addEventListener("click", () => { setAuto(false); go(scene - 1); });
+  next.addEventListener("click", () => { setAuto(false); go(scene + 1); });
+  document.getElementById("replay").addEventListener("click", () => go(scene));
+  autoBtn.addEventListener("click", () => {
+    if (auto) return setAuto(false);
+    setAuto(true);
+    if (scene === steps.length - 1) go(0); else go(scene);
+  });
+  document.addEventListener("keydown", e => {
+    if (e.key === "ArrowRight") { setAuto(false); go(scene + 1); }
+    if (e.key === "ArrowLeft") { setAuto(false); go(scene - 1); }
+  });
+
+  function frame(now) {
+    time = now / 1000;
+    const el = (now - start) / 1000;
+    const t = clamp(el / scenes[scene].dur);
+    draw(scene, t);
+    if (auto && el > scenes[scene].dur + 2.4) {
+      if (scene < steps.length - 1) go(scene + 1); else setAuto(false);
+    }
+    requestAnimationFrame(frame);
+  }
+  go(0);
+  requestAnimationFrame(frame);
+})();
+</script>
+
+</body></html>
